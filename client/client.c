@@ -20,12 +20,6 @@ void str_cli(int sockfd)
 	int n;
 	while(1)
 	{
-		/*
-		if(fgets(sendline , MAXSIZE, stdin) == NULL)
-		{
-			//read EOF
-			break;
-		}*/
 		printf("input some message to send:\n");
 		scanf("%s", sendline);
 
