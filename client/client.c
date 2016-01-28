@@ -12,6 +12,37 @@
 #define LISTENQ 256
 #define MAXSIZE 2048
 
+/*普通客户端消息处理函数*/
+void str_cli(int sockfd)
+{
+	/*发送和接收缓冲区*/
+	char sendline[MAXSIZE] , recvline[MAXSIZE];
+	int n;
+	while(1)
+	{
+		/*
+		if(fgets(sendline , MAXSIZE, stdin) == NULL)
+		{
+			//read EOF
+			break;
+		}*/
+		printf("input some message to send:\n");
+		scanf("%s", sendline);
+
+		n = write(sockfd , sendline , strlen(sendline));
+		printf("send:%s\n", sendline);
+
+		n = read(sockfd, recvline, MAXSIZE);
+		if(n == 0){
+			printf("server terminated prematurely\n");
+			break;
+		}
+		recvline[n] = '\0';
+		printf("recv:%s\n", recvline);
+
+	}//while
+}
+
 int main(int argc, char *argv[])
 {
 	char buff[MAXSIZE];
@@ -24,7 +55,7 @@ int main(int argc, char *argv[])
 
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if(sockfd == -1){
-		perro("socket error");
+		perror("socket error");
 		exit(1);
 	}
 
@@ -44,8 +75,10 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
+	/*调用消息处理函数*/
+	str_cli(sockfd);
 
-	return 0;
+	exit(0);
 }
 
 

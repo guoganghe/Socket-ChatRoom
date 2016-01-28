@@ -7,42 +7,67 @@
 #include <sys/socket.h>
 #include <netinet/in.h>  //struct sockaddr_in, 某些结构体声明、宏定义。
 #include <sys/epoll.h>
+#include <fcntl.h>
 
 #define PORT 8888
 #define LISTENQ 256
 #define MAXSIZE 2048
 
+static void setNonblocking(int sockfd)
+{
+	int opts;
+	opts=fcntl(sockfd,F_GETFL);
+	if(opts<0)
+	{
+		perror("fcntl(sock,GETFL)");
+		return;
+	}//if
 
-//epoll的ET模式下，正确的读写方式为：
-//读：只要可读，就一直读，直到返回0,或者 errno = EAGAIN  (如果不吧剩下的数据读完,socket将永远不可读)
-//写：只要可写，就一直写，知道数据发送完，或者 errno = EAGAIN  (如果不吧剩下的数据写完,socket将永远不可写)
+	opts = opts|O_NONBLOCK;
+	if(fcntl(sockfd,F_SETFL,opts)<0)
+	{
+		perror("fcntl(sock,SETFL,opts)");
+		return;
+	}//if
+}
+
+//epoll的ET(边沿出发)模式下，正确的读写方式为：
+//读：只要可读，就一直读，直到返回0,或者 errno = EAGAIN  (如果不把剩下的数据读完,socket将永远不可读)
+//写：只要可写，就一直写，直到数据发送完，或者 errno = EAGAIN  (如果不把剩下的数据写完,socket将永远不可写)
 static int epoll_read(int fd, char *buff, int size)
 {
 	int nread, readsize;
 
 	readsize = 0;
-	while(1)
+	while( (nread = read(fd, buff + readsize, size-1)) > 0)
 	{
-		nread = read(fd, &buff[readsize], size-readsize);
-		buff[readsize+nread] = '\0';
-		printf("epoll recieve message:%s", &buff[readsize]);
-		if(nread < 0){
-			//读取异常
-			if(errno == EAGAIN){
-				continue;
-			}
-			else{
-				return readsize;
-			}
-		}
-		else if(nread == 0){
-			//读到文件结尾 EOF
-			return readsize;
-		}
-		else{
-			readsize += nread;
-		}
+		readsize += nread;
+	}
+	if(nread == -1 && errno != EAGAIN){
+		perror("read error");
+	}
+	buff[readsize] = '\0';
+	return readsize;
+}
 
+//分包写还未理解完善
+static void epoll_write(int fd, char *buff)
+{
+	int datasize, nwrite;
+
+	datasize = strlen(buff);
+	nwrite = 0;
+	while(datasize > 0)
+	{
+		nwrite = write(fd, buff+nwrite, datasize);
+		if(nwrite == -1 && errno != EAGAIN){
+			perror("write error");
+			break;
+		}
+		else if(errno == EAGAIN){
+			break;
+		}
+		datasize -= nwrite;
 	}
 }
 
@@ -55,6 +80,7 @@ static void do_epoll(int listenfd)
 	int fd_numb;
 	int i, rw_size;
 	char buf[MAXSIZE];
+	int clilen;
 
 	//创建一个描述符
 	epollfd = epoll_create(LISTENQ);
@@ -70,20 +96,22 @@ static void do_epoll(int listenfd)
 		//获取已经准备好的描述符事件
 		//第3个参数不能大于epoll_create的参数, -1:超时时间, -1表示永久阻塞
 		fd_numb = epoll_wait(epollfd, events, LISTENQ, -1);
-		printf("收到连接请求数:%d\n", fd_numb);
+		//printf("收到连接请求数:%d\n", fd_numb);
 
 		//处理事件
 		for(i=0; i<fd_numb; i++)
 		{
 			//检测到用户连接
 			if(events[i].data.fd == listenfd){
-				sockfd = accept(listenfd, (struct sockaddr *)&clien_addr, (int *)sizeof(clien_addr) );
+				clilen = sizeof(clien_addr);
+				sockfd = accept(listenfd, (struct sockaddr *)&clien_addr, &clilen );
 				if(sockfd == -1){
 					perror("accept error");
 					exit(1);
 				}
-				printf("accept a new client: %d:%d", inet_ntoa(clien_addr.sin_addr), clien_addr.sin_port );
+				printf("accept a new client: %d:%d\n", inet_ntoa(clien_addr.sin_addr), clien_addr.sin_port );
 
+				setNonblocking(sockfd);
 				//继续添加事件
 				ev.data.fd = sockfd;
 				ev.events = EPOLLIN | EPOLLET;
@@ -91,20 +119,6 @@ static void do_epoll(int listenfd)
 			}
 
 			else if(events[i].events & EPOLLIN){
-				/*memset(buf, 0, sizeof(buf));
-				rw_size = read(sockfd, buf, MAXSIZE);
-				if(rw_size <= 0){
-					close(sockfd);
-				}else{
-					buf[rw_size] = '\0';
-					printf("recieve message by client[%d]:%s", i, buf);
-
-					//事件读改为写, EPOLL_CTL_MOD:修改已经注册的监听事件
-					ev.data.fd = sockfd;
-					ev.events = EPOLLOUT | EPOLLET;
-					epoll_ctl(epollfd, EPOLL_CTL_MOD, sockfd, &ev);
-				}*/
-
 				rw_size = epoll_read(sockfd, buf, MAXSIZE);
 				//事件读改为写, EPOLL_CTL_MOD:修改已经注册的监听事件
 				ev.data.fd = sockfd;
@@ -112,7 +126,8 @@ static void do_epoll(int listenfd)
 				epoll_ctl(epollfd, EPOLL_CTL_MOD, sockfd, &ev);
 			}
 			else if(events[i].events & EPOLLOUT){
-				rw_size = write(sockfd, buf, rw_size);
+				//rw_size = write(sockfd, buf, rw_size);
+				epoll_write(sockfd, buf);
 
 				//事件写改读
 				ev.data.fd = events[i].data.fd;
@@ -139,6 +154,7 @@ int main(int argc, char *argv[])
 		perror("socket error");
 		exit(1);
 	}
+	setNonblocking(listenfd);
 
 	memset(&server_addr, 0, sizeof(server_addr));
 	server_addr.sin_family = AF_INET;
@@ -147,7 +163,7 @@ int main(int argc, char *argv[])
 
 	//设置socket状态
 	//SOL_SOCKET:存取socket层, SO_REUSEADDR:允许在bind()过程中本地址可重复使用
-	setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+	//setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
 	//绑定套接字
 	result = bind(listenfd, (struct sockaddr *)&server_addr, sizeof(server_addr));
