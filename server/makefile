@@ -3,7 +3,7 @@ TARGET:=server
 all: $(TARGET)
 
 $(TARGET):server.c
-	gcc server.c -o $@
+	gcc server.c server.h -lpthread -o $@
 
 rebuild: clean all
 
