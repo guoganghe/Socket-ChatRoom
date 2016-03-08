@@ -52,7 +52,7 @@ void user_register(USER *usermsg)
 	/*执行插入操作*/
 	memset(sql , 0 , sizeof(sql));
 	sprintf(sql , "insert into User(username, password, quesion, answer) \
-	               values(%s,%s,%s,%s);",usermsg->From_UseName, usermsg->password, "", "");
+	               values('%s','%s','%s','%s');",usermsg->From_UseName, usermsg->password, "", "");
 
 	ret = sqlite3_prepare(db , sql , strlen(sql) , &stmt , &tail);	
 	if(ret != SQLITE_OK)
@@ -60,7 +60,7 @@ void user_register(USER *usermsg)
 		//这里出错
 		perror("sqlite3_prepare error");
 		
-		ret = sqlite3_step(stmt);
+		//ret = sqlite3_step(stmt);
 		sqlite3_finalize(stmt);
 		sqlite3_close(db);
 		
