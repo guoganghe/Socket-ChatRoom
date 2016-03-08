@@ -1,18 +1,17 @@
-#include <unistd.h>      //POSIX(fork¡¢pipe¡¢read..)
+ï»¿#ifndef __SERVER_H__
+#define __SERVER_H__
+
+#include <unistd.h>      //POSIX(forkã€pipeã€read..)
 #include <stdio.h>
 #include <stdlib.h>      //exit().....
 #include <errno.h>
 #include <string.h>
-#include <sys/types.h>   //»ù±¾ÏµÍ³Êı¾İÀàĞÍ
+#include <sys/types.h>   //åŸºæœ¬ç³»ç»Ÿæ•°æ®ç±»å‹
 #include <sys/socket.h>
-#include <netinet/in.h>  //struct sockaddr_in, Ä³Ğ©½á¹¹ÌåÉùÃ÷¡¢ºê¶¨Òå¡£
+#include <netinet/in.h>  //struct sockaddr_in, æŸäº›ç»“æ„ä½“å£°æ˜ã€å®å®šä¹‰ã€‚
 #include <sys/epoll.h>
 #include <fcntl.h>
 #include <pthread.h>
-
-#define PORT 8888
-#define LISTENQ 256
-#define MAXSIZE 2048
 
 static void setNonblocking(int sockfd);
 static int epoll_read(int fd, char *buff, int size);
@@ -20,4 +19,4 @@ static void epoll_write(int fd, char *buff);
 static void do_epoll(int listenfd);
 static void* handleThread(int *fd);
 
-
+#endif

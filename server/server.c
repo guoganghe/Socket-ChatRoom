@@ -1,3 +1,4 @@
+﻿#include "config.h"
 #include "server.h"
 
 int main(int argc, char *argv[])
@@ -21,7 +22,7 @@ int main(int argc, char *argv[])
 
 	//设置socket状态
 	//SOL_SOCKET:存取socket层, SO_REUSEADDR:允许在bind()过程中本地址可重复使用
-	//setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+	setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
 	//绑定套接字
 	result = bind(listenfd, (struct sockaddr *)&server_addr, sizeof(server_addr));
@@ -80,7 +81,7 @@ static void do_epoll(int listenfd)
 					perror("accept error");
 					exit(1);
 				}
-				printf("accept a new client: %s:%d\n", inet_ntoa(clien_addr.sin_addr), ntohs(clien_addr.sin_port)/* clien_addr.sin_port*/ );
+				//printf("accept a new client: %s:%d\n", inet_ntoa(clien_addr.sin_addr), ntohs(clien_addr.sin_port)/* clien_addr.sin_port*/ );
 
 				setNonblocking(sockfd);
 				//继续添加事件
@@ -88,13 +89,8 @@ static void do_epoll(int listenfd)
 				ev.events = EPOLLIN | EPOLLET;
 				epoll_ctl(epollfd, EPOLL_CTL_ADD, sockfd, &ev);
 			}
-			/*
-			else if(events[i].events & EPOLLIN || events[i].events & EPOLLOUT){
-				printf("创建了处理线程");
-				pthread_create(&pid , NULL, (void *)handleThread, (void *)&sockfd);
-			}*/
-			
 			else if(events[i].events & EPOLLIN){
+				//printf("创建了处理线程\n");
 				pthread_create(&pid , NULL, (void *)handleThread, (void *)&sockfd);
 			}
 			/*
@@ -128,10 +124,37 @@ static void* handleThread(int *fd)
 	char buff[MAXSIZE];
 	int rwsize;
 	
+	USER usermsg;
+	
 	sockfd = *fd;
 	rwsize = epoll_read(sockfd, buff, MAXSIZE);
-	printf("receve:%s\n", buff);
-	epoll_write(sockfd, buff);
+	//printf("receve:%s\n", buff);
+	//epoll_write(sockfd, buff);
+	
+	memcpy(&usermsg, buff, sizeof(buff));
+	usermsg.From_sockfd = sockfd;
+	
+	switch(usermsg.MsgType)
+	{
+		/*登陆*/
+		case 1:
+			user_login(&usermsg);
+			memcpy(buff, &usermsg, sizeof(usermsg));
+			epoll_write(sockfd, buff);
+			break;
+		/*注册*/
+		case 2:
+			user_register(&usermsg);
+			memcpy(buff, &usermsg, sizeof(usermsg));
+			epoll_write(sockfd, buff);
+			break;
+		/*找回密码*/
+		case 3:
+			
+			break;
+		
+		
+	}
 	
 	return (void*)0;
 }

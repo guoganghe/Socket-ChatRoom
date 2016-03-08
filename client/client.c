@@ -1,41 +1,9 @@
-#include <unistd.h>      //POSIX(fork、pipe、read..)
-#include <stdio.h>
-#include <stdlib.h>      //exit().....
-#include <errno.h>
-#include <string.h>
-#include <sys/types.h>   //基本系统数据类型
-#include <sys/socket.h>
-#include <netinet/in.h>  //struct sockaddr_in, 某些结构体声明、宏定义。
-#include <sys/epoll.h>
+﻿#include "config.h"
+#include "client.h"
+#include "funtion.h"
+#include "interface.h"
 
-#define PORT 8888
-#define LISTENQ 256
-#define MAXSIZE 2048
-
-/*普通客户端消息处理函数*/
-void str_cli(int sockfd)
-{
-	/*发送和接收缓冲区*/
-	char sendline[MAXSIZE] , recvline[MAXSIZE];
-	int n;
-	while(1)
-	{
-		printf("input some message to send:\n");
-		scanf("%s", sendline);
-
-		n = write(sockfd , sendline , strlen(sendline));
-		printf("send:%s\n", sendline);
-
-		n = read(sockfd, recvline, MAXSIZE);
-		if(n == 0){
-			printf("server terminated prematurely\n");
-			break;
-		}
-		recvline[n] = '\0';
-		printf("recv:%s\n", recvline);
-
-	}//while
-}
+static void Chat_funtion(int sockfd);
 
 int main(int argc, char *argv[])
 {
@@ -69,10 +37,41 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	/*调用消息处理函数*/
-	str_cli(sockfd);
+	Chat_funtion(sockfd);
 
 	exit(0);
 }
 
-
+static void Chat_funtion(int sockfd)
+{
+	/*发送和接收缓冲区*/
+	char msgbuff[MAXSIZE];
+	int Msg_Type;
+	char username[21];
+	int nsize,ret;
+	USER usermsg;
+	
+	while(1)
+	{
+		mainInterface();
+		
+		scanf("%d", &Msg_Type);
+		switch(Msg_Type)
+		{
+			case 1:
+				/*登陆*/
+				user_login(sockfd, Msg_Type);
+				break;
+			case 2:
+				/*注册*/
+				user_register(sockfd, Msg_Type);
+				break;
+			case 4:
+				/*退出*/
+				return;
+			default:
+				printf("无该项操作\n");
+				break;
+		}
+	}
+}
